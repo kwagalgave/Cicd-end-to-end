@@ -1,37 +1,72 @@
 pipeline {
     agent any
+    
+    tools{
+        jdk 'jdk'
+        maven 'maven3'
+    }
+    
+    environment{
+        SCANNER_HOME= tool 'sonar-scanner'
+    }
+
     stages {
-        stage('Checkout') {
+        stage('git checkout') {
             steps {
-                checkout scm
+               git 'https://github.com/kwagalgave/Cicd-end-to-end.git'
             }
         }
-        stage('Code Analysis with SonarQube') {
+        
+        stage('Code compile') {
             steps {
-                script {
-                    withSonarQubeEnv('SonarQube') {
-                        sh 'mvn clean verify sonar:sonar'
-                    }
-                }
+               sh 'mvn clean compile'
             }
         }
-        stage('Build Docker Image') {
+        
+        stage('sonarqube analysis') {
             steps {
-                sh 'docker build -t demo-app:latest .'
+              withSonarQubeEnv('sonar-scanner') {
+                  sh '''$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=new \
+                  -Dsonar.java.binaries=. \
+                  -Dsonar.projectKey=new'''
+              }
             }
         }
-        stage('Push Docker Image') {
+        stage('Code build') {
             steps {
-                withDockerRegistry([credentialsId: 'docker-hub-creds', url: 'https://index.docker.io/v1/']) {
-                    sh 'docker tag demo-app:latest <your-docker-hub-username>/demo-app:latest'
-                    sh 'docker push <your-docker-hub-username>/demo-app:latest'
-                }
+               sh 'mvn clean install'
             }
         }
-        stage('Deploy to Kubernetes') {
+       
+        stage('docker build') {
             steps {
-                sh 'kubectl apply -f k8s/deployment.yaml'
+               script{
+                   withDockerRegistry(credentialsId: 'd415be1e-0d8d-4559-a2a8-f34183b74b09', toolName: 'docker') {
+                       sh "docker build -t cicd ."
+                  }
+               }
             }
         }
+        stage('docker push') {
+            steps {
+              script{
+                  withDockerRegistry(credentialsId: 'd415be1e-0d8d-4559-a2a8-f34183b74b09', toolName: 'docker') {
+                      sh "docker tag cicd kwagalgave/end-to-end:12"
+                      sh "docker push kwagalgave/end-to-end:12"
+                 }
+              }
+           }
+       }
+       
+       stage('deploy to k8s') {
+            steps {
+               script{
+                   withKubeCredentials(kubectlCredentials: [[ credentialsId: 'b7f2cf4e-a6ef-4e7b-a1ed-2782751a1ffb']]) {
+                       sh "kubectl apply -f k8s/deployment.yaml"
+                  }
+               }
+            }
+        }
+       
     }
 }
