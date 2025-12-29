@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: demo-app
-        image: kwagalgave/end-to-end:13
+        image: kwagalgave/cicd-project:22
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
